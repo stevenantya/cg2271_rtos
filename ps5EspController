@@ -1,0 +1,87 @@
+#include <ps5Controller.h>  // Include PS5 controller library
+
+typedef struct {
+    int8_t leftMotorSpeed;  // Range: -127 to +127
+    int8_t rightMotorSpeed; // Range: -127 to +127
+    uint8_t stopBit;        // 0 or 1 to indicate stop status
+} MotorSpeeds;
+
+MotorSpeeds motorSpeeds;  // Define the motorSpeeds struct globally
+
+void setup() {
+    Serial.begin(19200);    // Initialize Serial (connected to RX0)
+    Serial2.begin(19200, SERIAL_8N1, 16, 17);  // Initialize UART communication on Serial2 (RX2 on PIN 16, TX2 on PIN 17), baud rate set to 19200
+    ps5.begin("ac:36:1b:e1:fd:05");  // Initialize PS5 controller connection using MAC address
+    Serial.println("Ready to connect to PS5 controller...");
+    motorSpeeds.stopBit = 0;  // Initialize stopBit to 0
+}
+
+void loop() {
+    if (ps5.isConnected()) {
+        // Check the Cross button to toggle the stop bit
+        if (motorSpeeds.stopBit == 0 && ps5.Cross() == 1) {
+            motorSpeeds.stopBit = 1;
+        }
+
+        // Get normalized joystick input
+        float xNorm = ps5.LStickX() / 127.0;
+        float yNorm = ps5.LStickY() / 127.0;
+        
+        // Forward and turning components
+        float forwardComponent = yNorm;  // Full forward or backward speed
+        float turnComponent = xNorm;     // Full left or right turn
+
+        // Calculate preliminary left and right values
+        float leftValue = forwardComponent + turnComponent;
+        float rightValue = forwardComponent - turnComponent;
+
+        // Normalize values to stay within [-1.0, 1.0]
+        float maxVal = max(abs(leftValue), abs(rightValue));
+        if (maxVal > 1.0) {
+            leftValue /= maxVal;
+            rightValue /= maxVal;
+        }
+
+        // Map to motor control range (-127 to +127)
+        if (yNorm >= 0) {  // Forward mode
+            motorSpeeds.leftMotorSpeed = int8_t(leftValue * 127.0);
+            motorSpeeds.rightMotorSpeed = int8_t(rightValue * 127.0);
+        } else {  // Reverse mode, swap values for direction match
+            motorSpeeds.leftMotorSpeed = int8_t(rightValue * 127.0);
+            motorSpeeds.rightMotorSpeed = int8_t(leftValue * 127.0);
+        }
+
+        // Send the struct as bytes via Serial2
+        Serial2.write((uint8_t*)&motorSpeeds, sizeof(MotorSpeeds));
+        
+        // Debugging output
+        Serial.print("Sent leftMotorSpeed: ");
+        Serial.println(motorSpeeds.leftMotorSpeed);
+        Serial.print("Sent rightMotorSpeed: ");
+        Serial.println(motorSpeeds.rightMotorSpeed);
+        Serial.print("StopBit: ");
+        Serial.println(motorSpeeds.stopBit);
+
+        delay(100);  // Shorter delay for more responsive control
+    }
+
+    // Check for received data on Serial2 (RX2)
+    if (Serial2.available() > 0) {
+        char receivedChar = Serial2.read();
+        Serial.print("Received data: ");
+        Serial.println(receivedChar);  // Display the received data as a character
+        
+        // Convert to binary format for debugging
+        Serial.print("Received data in binary: ");
+        printBinary(receivedChar);
+        Serial.println();  // New line for readability
+    }
+
+    delay(100);  // Shorter delay for smoother operation
+}
+
+void printBinary(char c) {
+    for (int i = 7; i >= 0; i--) {
+        Serial.print((c >> i) & 1);
+    }
+}
