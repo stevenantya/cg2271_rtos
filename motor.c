@@ -6,46 +6,42 @@
 	#include  CMSIS_device_header
 	#include "cmsis_os2.h"
 
-	 
-	 osThreadId_t leftMotor_FlagID;
-	 osThreadId_t rightMotor_FlagID;
-	 osThreadId_t motor_FlagID;
 	/*----------------------------------------------------------------------------
 	 * Application main thread
 	 *---------------------------------------------------------------------------*/
 	 
 	 // use portD, 0 1 2 3
 	void InitGPIO() {
-		//Turn on portb clock
+		//Turn on portd clock
 		SIM->SCGC5 |= SIM_SCGC5_PORTD_MASK;
 		
-		//clear function for portb 2 and 3
+		//clear function for portd 0,1,2 and 3
 		PORTD->PCR[0] &= ~PORT_PCR_MUX_MASK;
 		PORTD->PCR[1] &= ~PORT_PCR_MUX_MASK;
 		PORTD->PCR[2] &= ~PORT_PCR_MUX_MASK;
 		PORTD->PCR[3] &= ~PORT_PCR_MUX_MASK;
 		
-		//turn on pwm for portb2 and 3
+		//turn on pwm for portd 0,1, 2 and 3
 		PORTD->PCR[0] |= PORT_PCR_MUX(4);
 		PORTD->PCR[1] |= PORT_PCR_MUX(4);
 		PORTD->PCR[2] |= PORT_PCR_MUX(4);
 		PORTD->PCR[3] |= PORT_PCR_MUX(4);
 		
-		//turn on tpm2 clock
+		//turn on tpm0 clock
 		SIM->SCGC6 |= SIM_SCGC6_TPM0_MASK;
 		
 		//turn on sopt??
 		SIM->SOPT2 &= ~SIM_SOPT2_TPMSRC_MASK;
 		SIM->SOPT2 |= SIM_SOPT2_TPMSRC(1);
 		
-		//clear prescaler and cmod
+		//clear prescaler and cmod for TPM0
 		TPM0->SC &= ~(TPM_SC_CMOD_MASK | TPM_SC_PS_MASK);
 		
-		//Set prescalar to 32 and cmod to use internal clock
+		//Set prescalar to 32 and cmod to use internal clock for TPM0
 		TPM0->SC |= TPM_SC_PS(5);
 		TPM0->SC |= TPM_SC_CMOD(1);
 		
-		//ENABLE EDGE ALIGNED PWM
+		//ENABLE EDGE ALIGNED PWM for TPM0
 		TPM0->SC &= ~TPM_SC_CPWMS_MASK;
 		
 		//channel 0 config for edge-aligned pwm
@@ -55,14 +51,13 @@
 		TPM0_C1SC &= ~(TPM_CnSC_ELSB_MASK | TPM_CnSC_ELSA_MASK | TPM_CnSC_MSB_MASK | TPM_CnSC_MSA_MASK);
 		TPM0_C1SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1));
 		
-		
 		TPM0_C2SC &= ~(TPM_CnSC_ELSB_MASK | TPM_CnSC_ELSA_MASK | TPM_CnSC_MSB_MASK | TPM_CnSC_MSA_MASK);
 		TPM0_C2SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1));
 		
 		TPM0_C3SC &= ~(TPM_CnSC_ELSB_MASK | TPM_CnSC_ELSA_MASK | TPM_CnSC_MSB_MASK | TPM_CnSC_MSA_MASK);
 		TPM0_C3SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1));
 		
-		
+		//SET Mod value for TPM0
 		TPM0->MOD = 6000;
 		
 	}

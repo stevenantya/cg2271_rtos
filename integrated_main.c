@@ -6,33 +6,159 @@
 #include  CMSIS_device_header
 #include "cmsis_os2.h"
 
+//CONSTANTS
 #define PTB0_Pin 0 // PortD Pin 0
-#define MASK(x) (1 << (x))
-
 #define RED_LED 18 // PortB Pin 18
 #define GREEN_LED 19 // PortB Pin 19
+#define UART2_RX_PIN 23 // UART2 RX Pin (PTE23)
+#define UART2_TX_PIN 22 // UART2 TX Pin (PTE22)
+#define Q_SIZE 32 // Queue Size
+#define MASK(x) (1 << (x))
 
-osThreadId_t runningTuneId, finishTuneId, motorId;
-osEventFlagsId_t finishFlag;
-
-//CONSTANTS
-const osThreadAttr_t highPrio = {
+const osThreadAttr_t finishTuneThreadAttr = {
+    .name = "FinishTuneThread",
 	.priority = osPriorityHigh
 };
+const osThreadAttr_t uartAttr = {
+    .name = "UARTThread",
+    .priority = osPriorityNormal
+};
+const osThreadAttr_t motorThreadAttr = {
+    .name = "MotorThread",
+    .priority = osPriorityNormal
+};
+const osThreadAttr_t runningTuneThreadAttr = {
+    .name = "RunningTuneThread",
+    .priority = osPriorityNormal
+};
+const osThreadAttr_t brainAttr = {
+    .name = "BrainThread",
+    .priority = osPriorityNormal
+};
+
+/* DELAY Function */
+static void delay(volatile uint32_t nof){
+	while(nof!= 0){
+		__ASM("NOP");  nof--;
+	}
+}
+
+/*------------------------*
+    QUEUE Data Structure
+*------------------------*/
+// Queue Structure
+typedef struct {
+    unsigned char Data[Q_SIZE];
+    unsigned int Head;
+    unsigned int Tail;
+    unsigned int Size;
+} Q_T;
+
+// Queue Functions
+void Q_Init(Q_T *q) {
+    unsigned int i;
+    for (i = 0; i < Q_SIZE; i++)
+        q->Data[i] = 0;  // to simplify our lives when debugging
+    q->Head = 0;
+    q->Tail = 0;
+    q->Size = 0;
+}
+
+int Q_Empty(Q_T *q) {
+    return q->Size == 0;
+}
+
+int Q_Full(Q_T *q) {
+    return q->Size == Q_SIZE;
+}
+
+int Q_Enqueue(Q_T *q, unsigned char d) {
+    if (!Q_Full(q)) {
+        q->Data[q->Tail++] = d;
+        q->Tail %= Q_SIZE;
+        q->Size++;
+        return 1;  // success
+    } else {
+        return 0;  // failure
+    }
+}
+
+unsigned char Q_Dequeue(Q_T *q) {
+    unsigned char t = 0;
+    if (!Q_Empty(q)) {
+        t = q->Data[q->Head];
+        q->Data[q->Head++] = 0;  // to simplify debugging
+        q->Head %= Q_SIZE;
+        q->Size--;
+    }
+    return t;
+}
+
+// Queue Instance
+Q_T RxQ;
+
+
+/*------------------------*
+    INTERRUPTS and IRQs
+*------------------------*/
+// UART Interrupt Handler
+void UART2_IRQHandler(void) {
+    // Check if receive data register is full
+    NVIC_ClearPendingIRQ(UART2_IRQn);
+    if (UART2->S1 & UART_S1_RDRF_MASK) {
+        // Received a character
+        if (!Q_Full(&RxQ)) {
+            Q_Enqueue(&RxQ, UART2->D);
+        } else {
+            // Error - queue full, data lost
+        }
+    }
+}
+
+/*-------------------------*
+      GLOBAL VARIABLES
+*--------------------------*/
+volatile char new_data;
+volatile int stop_data;
+volatile int x_data;
+volatile int y_data;
 
 /*----------------------------------------------------------------------------
  * Application main thread. With threads: motor_thread
  *---------------------------------------------------------------------------*/
+osThreadId_t runningTune_handle, finishTune_handle, motor_handle, uart_handle;;
+osEventFlagsId_t newDataFlag, finishFlag, moveFlag;
 
-void initGPIO(void) {
-    //Enable Port Clocks
-    SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK; //enable port B previously in Aaron code is SIM_SCGC5
-    SIM->SCGC5 |= SIM_SCGC5_PORTD_MASK; //enable port D
-    initTPM(); //initialize TPM for everything
-    initBuzzer(); //PTB Pin 0 and TPM1 Channel 0
-    initMotor(); //PTD Pin 0,1,2,3 and TPM0 Channel 0,1,2,3
-    initLED(); //PTB Pin 18,19. GPIO Out, Init=High.
+/*---Initialization----*/
+void initUART2(void) {
+    PORTE->PCR[UART2_TX_PIN] = PORT_PCR_MUX(4);
+    PORTE->PCR[UART2_RX_PIN] = PORT_PCR_MUX(4);
+
+    uint32_t bus_clock = SystemCoreClock / 2;
+    uint16_t baud_divisor = (bus_clock) / (16 * 19200);
+
+    UART2->BDH = (baud_divisor >> 8) & UART_BDH_SBR_MASK;
+    UART2->BDL = baud_divisor & UART_BDL_SBR_MASK;
+
+    UART2->C1 = 0x00;
+    UART2->C3 = 0x00;
+    UART2->S2 = 0x00;
+
+    // Enable UART2 receiver and transmitter
+    UART2->C2 |= UART_C2_RE_MASK | UART_C2_TE_MASK;
+
+    // Enable UART2 interrupts in NVIC
+    NVIC_SetPriority(UART2_IRQn, 128); 
+    NVIC_ClearPendingIRQ(UART2_IRQn); 
+    NVIC_EnableIRQ(UART2_IRQn);
+
+    // Enable receive interrupt for UART2
+    UART2->C2 |= UART_C2_RIE_MASK;
+
+    // Initialize the receive queue
+    Q_Init(&RxQ);
 }
+
 void initTPM(void) {
     /*-----TPM 0-----*/
     SIM->SCGC6 |= SIM_SCGC6_TPM0_MASK; //enable TPM0 module
@@ -110,45 +236,21 @@ void initLED(void) {
 	PTB->PDOR |= (MASK(RED_LED) | MASK(GREEN_LED));	
 }
 
-__NO_RETURN void motor_thread (void *argument) {
-    //say the input -3,...,3 received from uart is in var X and Y
-    int Yval = Y * 1000;
-    int Xval = X * 1000;
-    
-    //this is the X,Y pos decoder to Left, Right Wheel Vals
-    int leftMotorValue = Yval + Xval;
-    int rightMotorValue = Yval - Xval;
-    
-    
-    //Channel 0 and 1 is left motor, Channel 2 and 3 is right motor
-    //If C0 High and C1 Low, motor moves forward.
-    //If C0 Low and C0 High, motor moves backward.
-    //Same for C2 and C3.
-    if (leftMotorValue > 0) {
-        TPM0_C0V = leftMotorValue;
-        TPM0_C1V = 0;
-    }
-    else if (leftMotorValue < 0) {
-        TPM0_C0V = 0;
-        TPM0_C1V = leftMotorValue;
-    }
-    if (rightMotorValue > 0) {
-        TPM0_C2V = rightMotorValue;
-        TPM0_C3V = 0;
-    }
-    else if (rightMotorValue < 0) {
-        TPM0_C2V = 0;
-        TPM0_C3V = rightMotorValue;
-    }
-    
-    if (rightMotorValue == 0 && leftMotorValue == 0) {
-        TPM0_C0V = 0;
-        TPM0_C1V = 0;
-        TPM0_C2V = 0;
-        TPM0_C3V = 0;
-    }
+void initGPIO(void) {
+    //Enable Port Clocks
+    SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK; //enable port B previously in Aaron code is SIM_SCGC5
+    SIM->SCGC5 |= SIM_SCGC5_PORTD_MASK; //enable port D
+    SIM->SCGC4 |= SIM_SCGC4_UART2_MASK; //enable UART2
+    SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK; //enable port E
+    initTPM(); //initialize TPM for everything
+    initBuzzer(); //PTB Pin 0 and TPM1 Channel 0
+    initMotor(); //PTD Pin 0,1,2,3 and TPM0 Channel 0,1,2,3
+    initLED(); //PTB Pin 18,19. GPIO Out, Init=High.
+    initUART2();
 }
 
+
+/*---Main Threads---*/
 void onLED(int port, int ID_LED){
 	//set pin to low
 	switch(port) {  
@@ -182,13 +284,6 @@ void offLED(int port, int ID_LED) {
 		case 3:
 			PTD->PDOR |= MASK(ID_LED);
 		break;
-	}
-}
-
-/* DELAY Function */
-static void delay(volatile uint32_t nof){
-	while(nof!= 0){
-		__ASM("NOP");  nof--;
 	}
 }
 
@@ -233,7 +328,7 @@ void Stop(void) {
 	TPM1_C0V = 0;
 }
 
-__NO_RETURN void playRunningTune_thread(void* arguments) {	
+__NO_RETURN void runningTune_thread(void* arguments) {	
 	for(;;) {
 		//PlayC();
 		//osDelay(24000000);
@@ -248,7 +343,7 @@ __NO_RETURN void playRunningTune_thread(void* arguments) {
 	}
 }
 
-__NO_RETURN void playFinishTune_thread(void* arguments) { 
+__NO_RETURN void finishTune_thread(void* arguments) { 
 	for(;;) {	
 		osEventFlagsWait(finishFlag, 1, osFlagsWaitAny, 	osWaitForever); //wait for the finish flag to be set
 		//PlayG();
@@ -264,23 +359,114 @@ __NO_RETURN void playFinishTune_thread(void* arguments) {
 		osDelay(1000000);
 		offLED(1, RED_LED);
 		osDelay(1000000);
-	
+        
+        //
 	}
 }
 
+__NO_RETURN void motor_thread (void *argument) {
+    //say the input -3,...,3 received from uart is in var X and Y
+    osEventFlagsWait(moveFlag, 1, osFlagsWaitAny, osWaitForever); //wait for move flag to be set
+
+    int Yval = y_data * 1000;
+    int Xval = x_data * 1000;
+    
+    //this is the X,Y pos decoder to Left, Right Wheel Vals
+    int leftMotorValue = Yval + Xval;
+    int rightMotorValue = Yval - Xval;
+    
+    
+    //Channel 0 and 1 is left motor, Channel 2 and 3 is right motor
+    //If C0 High and C1 Low, motor moves forward.
+    //If C0 Low and C0 High, motor moves backward.
+    //Same for C2 and C3.
+    if (leftMotorValue > 0) {
+        TPM0_C0V = leftMotorValue;
+        TPM0_C1V = 0;
+    }
+    else if (leftMotorValue < 0) {
+        TPM0_C0V = 0;
+        TPM0_C1V = leftMotorValue;
+    }
+    if (rightMotorValue > 0) {
+        TPM0_C2V = rightMotorValue;
+        TPM0_C3V = 0;
+    }
+    else if (rightMotorValue < 0) {
+        TPM0_C2V = 0;
+        TPM0_C3V = rightMotorValue;
+    }
+    
+    if (rightMotorValue == 0 && leftMotorValue == 0) {
+        TPM0_C0V = 0;
+        TPM0_C1V = 0;
+        TPM0_C2V = 0;
+        TPM0_C3V = 0;
+    }
+    // Adding a delay to avoid hogging the CPU
+    osDelay(1);
+}
+
+__NO_RETURN void uart_thread(void *argument) {
+    while (1) {
+        // Check if data is available in the Rx queue
+        if (!Q_Empty(&RxQ)) {
+            new_data = Q_Dequeue(&RxQ);  // Dequeue received character
+            osEventFlagsSet(newDataFlag, 1); //set flag to indicate new data
+        }
+        // Adding a delay to avoid hogging the CPU
+        osDelay(1);
+    }
+}
+
+__NO_RETURN void brain_thread(void *argument) {
+    while (1) {
+        osEventFlagsWait(newDataFlag, 1, osFlagsWaitAny, osWaitForever); //wait for new data flag to be set
+        //parse new data
+        stop_data = new_data & (0b00000001);
+        x_data = ( new_data & (0b00000110) ) >> 1;
+        if (new_data & (0b00001000)) {
+            x_data = -x_data;
+        }
+        y_data = ( new_data & (0b00110000) ) >> 4;
+        if (new_data & (0b01000000)) {
+            y_data = -y_data;
+        }
+
+        if (stop_data == 1) {
+            osEventFlagsSet(finishFlag, 1);
+        }
+        
+        osEventFlagsSet(moveFlag, 1);
+        // Adding a delay to avoid hogging the CPU
+        osDelay(1);
+    }
+}
+
+void initEventFlags(void) {
+    eventFlag = osEventFlagsNew(NULL);
+    finishFlag = osEventFlagsNew(NULL);
+    moveFlag = osEventFlagsNew(NULL);
+}
+
+__NO_RETURN void app_main(void *argument) {
+
+    initEventFlags();
+
+    runningTune_handle   = osThreadNew(runningTune_thread, NULL, &runningTuneThreadAttr); //create thread for running tune
+    finishTune_handle    = osThreadNew(finishTune_thread, NULL, &finishTuneThreadAttr); //finish thread set to higher priority to cut in when flag is set
+    motor_handle         = osThreadNew(motor_thread, NULL, &motorThreadAttr);
+    uart_handle          = osThreadNew(uart_thread, NULL, &uartAttr);
+    brain_handle         = osThreadNew(brain_thread, NULL, &brainAttr);
+    for(;;) {}
+}
+
 int main (void) {
- 
     // System Initialization
     SystemCoreClockUpdate();
-    initGPIO(); //initialize everything including buzzer and motor
+    initGPIO(); //initialize everything: buzzer, motor, LED, UART
 
-	//Kernel Initialisation
     osKernelInitialize();	
-    finishFlag = osEventFlagsNew(NULL); 
-    osEventFlagsClear(finishFlag, 1); //clear the flag
-    runningTuneId = osThreadNew(playRunningTune_thread, NULL, NULL); //create thread for running tune
-    finishTuneId = osThreadNew(playFinishTune_thread, NULL, &highPrio); //finish thread set to higher priority to cut in when flag is set
-    motorId = osThreadNew(motor_thread, NULL, NULL);
-    osKernelStart();                      
-    for (;;) {}
+    osThreadNew(app_main, NULL, NULL);
+    osKernelStart();
 }
