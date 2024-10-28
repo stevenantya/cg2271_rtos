@@ -126,7 +126,7 @@ volatile int y_data;
 /*----------------------------------------------------------------------------
  * Application main thread. With threads: motor_thread
  *---------------------------------------------------------------------------*/
-osThreadId_t runningTune_handle, finishTune_handle, motor_handle, uart_handle;;
+osThreadId_t runningTune_handle, finishTune_handle, motor_handle, uart_handle, brain_handle;
 osEventFlagsId_t newDataFlag, finishFlag, moveFlag;
 
 /*---Initialization----*/
@@ -365,46 +365,48 @@ __NO_RETURN void finishTune_thread(void* arguments) {
 }
 
 __NO_RETURN void motor_thread (void *argument) {
-    //say the input -3,...,3 received from uart is in var X and Y
-    osEventFlagsWait(moveFlag, 1, osFlagsWaitAny, osWaitForever); //wait for move flag to be set
+		while(1) {
+			//say the input -3,...,3 received from uart is in var X and Y
+			osEventFlagsWait(moveFlag, 1, osFlagsWaitAny, osWaitForever); //wait for move flag to be set
 
-    int Yval = y_data * 1000;
-    int Xval = x_data * 1000;
-    
-    //this is the X,Y pos decoder to Left, Right Wheel Vals
-    int leftMotorValue = Yval + Xval;
-    int rightMotorValue = Yval - Xval;
-    
-    
-    //Channel 0 and 1 is left motor, Channel 2 and 3 is right motor
-    //If C0 High and C1 Low, motor moves forward.
-    //If C0 Low and C0 High, motor moves backward.
-    //Same for C2 and C3.
-    if (leftMotorValue > 0) {
-        TPM0_C0V = leftMotorValue;
-        TPM0_C1V = 0;
-    }
-    else if (leftMotorValue < 0) {
-        TPM0_C0V = 0;
-        TPM0_C1V = leftMotorValue;
-    }
-    if (rightMotorValue > 0) {
-        TPM0_C2V = rightMotorValue;
-        TPM0_C3V = 0;
-    }
-    else if (rightMotorValue < 0) {
-        TPM0_C2V = 0;
-        TPM0_C3V = rightMotorValue;
-    }
-    
-    if (rightMotorValue == 0 && leftMotorValue == 0) {
-        TPM0_C0V = 0;
-        TPM0_C1V = 0;
-        TPM0_C2V = 0;
-        TPM0_C3V = 0;
-    }
-    // Adding a delay to avoid hogging the CPU
-    osDelay(1);
+			int Yval = y_data * 1000;
+			int Xval = x_data * 1000;
+			
+			//this is the X,Y pos decoder to Left, Right Wheel Vals
+			int leftMotorValue = Yval + Xval;
+			int rightMotorValue = Yval - Xval;
+			
+			
+			//Channel 0 and 1 is left motor, Channel 2 and 3 is right motor
+			//If C0 High and C1 Low, motor moves forward.
+			//If C0 Low and C0 High, motor moves backward.
+			//Same for C2 and C3.
+			if (leftMotorValue > 0) {
+					TPM0_C0V = leftMotorValue;
+					TPM0_C1V = 0;
+			}
+			else if (leftMotorValue < 0) {
+					TPM0_C0V = 0;
+					TPM0_C1V = leftMotorValue;
+			}
+			if (rightMotorValue > 0) {
+					TPM0_C2V = rightMotorValue;
+					TPM0_C3V = 0;
+			}
+			else if (rightMotorValue < 0) {
+					TPM0_C2V = 0;
+					TPM0_C3V = rightMotorValue;
+			}
+			
+			if (rightMotorValue == 0 && leftMotorValue == 0) {
+					TPM0_C0V = 0;
+					TPM0_C1V = 0;
+					TPM0_C2V = 0;
+					TPM0_C3V = 0;
+			}
+			// Adding a delay to avoid hogging the CPU
+			osDelay(1);
+		}
 }
 
 __NO_RETURN void uart_thread(void *argument) {
@@ -444,7 +446,7 @@ __NO_RETURN void brain_thread(void *argument) {
 }
 
 void initEventFlags(void) {
-    eventFlag = osEventFlagsNew(NULL);
+    newDataFlag = osEventFlagsNew(NULL);
     finishFlag = osEventFlagsNew(NULL);
     moveFlag = osEventFlagsNew(NULL);
 }
