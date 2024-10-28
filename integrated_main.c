@@ -13,6 +13,18 @@
 #define UART2_RX_PIN 23 // UART2 RX Pin (PTE23)
 #define UART2_TX_PIN 22 // UART2 TX Pin (PTE22)
 #define Q_SIZE 32 // Queue Size
+
+//Sharlyn's Constants
+#define GLED1 0 //CHANGE to PortX Pin X
+#define GLED2 1 //CHANGE to PortX Pin X
+#define GLED3 2 //CHANGE to PortX Pin X
+#define RLED1 3 //CHANGE to PortX Pin X
+#define RLED2 4 //CHANGE to PortX Pin X
+#define RLED3 5 //CHANGE to PortX Pin X
+#define MASK(x) (1 << (x)) // Shift 1 to the left for x times
+#define MOVE 1000 //CHANGE to 500ms
+#define STOP 2000 //CHANGE to 200ms
+
 #define MASK(x) (1 << (x))
 
 const osThreadAttr_t finishTuneThreadAttr = {
@@ -33,6 +45,14 @@ const osThreadAttr_t runningTuneThreadAttr = {
 };
 const osThreadAttr_t brainAttr = {
     .name = "BrainThread",
+    .priority = osPriorityNormal
+};
+const osThreadAttr_t redLEDThreadAttr = {
+    .name = "RedLEDThread",
+    .priority = osPriorityNormal
+};
+const osThreadAttr_t greenLEDThreadAttr = {
+    .name = "GreenLEDThread",
     .priority = osPriorityNormal
 };
 
@@ -135,8 +155,8 @@ void UART2_IRQHandler(void) {
 /*----------------------------------------------------------------------------
  * Application main thread. With threads: motor_thread
  *---------------------------------------------------------------------------*/
-osThreadId_t runningTune_handle, finishTune_handle, motor_handle, uart_handle, brain_handle;
-osEventFlagsId_t finishFlag;
+osThreadId_t greedLED_handle, redLED_handle, runningTune_handle, finishTune_handle, motor_handle, uart_handle, brain_handle;
+osEventFlagsId_t finishFlag, ledFlag;
 osMessageQueueId_t xyMessage, uartMessage;
 
 /*---Initialization----*/
@@ -244,6 +264,28 @@ void initLED(void) {
 	PTB->PDDR |= (MASK(RED_LED) | MASK(GREEN_LED));;
 	//set pins to high
 	PTB->PDOR |= (MASK(RED_LED) | MASK(GREEN_LED));	
+
+    // Configure MUX to make all 6 pins GPIO
+	PORTB->PCR[GLED1] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[GLED1] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+
+	PORTB->PCR[GLED2] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[GLED2] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+
+	PORTB->PCR[GLED3] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[GLED3] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+
+	PORTB->PCR[RLED1] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RLED1] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+
+	PORTB->PCR[RLED2] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RLED2] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor;
+
+	PORTB->PCR[RLED3] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RLED3] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor;
+
+	// Set Data Direction Registers to make output
+	PTB->PDDR |= (MASK(GLED1) | MASK(GLED2) | MASK(GLED3) | MASK(RLED1) | MASK(RLED2) | MASK(RLED3));
 }
 
 void initGPIO(void) {
@@ -260,7 +302,7 @@ void initGPIO(void) {
 }
 
 
-/*---Main Threads---*/
+/*---Functions---*/
 void onLED(int port, int ID_LED){
 	//set pin to low
 	switch(port) {  
@@ -336,6 +378,93 @@ void PlayB(void) {
 void Stop(void) {
 	TPM1->MOD = 0;
 	TPM1_C0V = 0;
+}
+
+/*------------------------*
+    THREADS
+*------------------------*/
+__NO_RETURN void GLedSwtich(void) {
+    /* Turns on green LED one by one when moving */
+	for (;;) {
+
+		// wait for led_flag to be 1 for MOVING
+		osEventFlagsWait(led_flag, 0x0001, osFlagsWaitAny, osWaitForever); // not sure if it is WaitAny
+
+		/* checks which LED is on and turn on the next LED */
+		if (PTB->PDOR & MASK(GLED1)) {
+			PTB->PCOR = (MASK(GLED1)); // off GLED1
+			PTB->PCOR = (MASK(GLED3)); // off GLED3
+			PTB->PSOR = (MASK(GLED2)); // on GLED2
+			osDelay(2000);
+		} else if (PTB->PDOR & MASK(GLED2)) {
+			PTB->PCOR = (MASK(GLED2)); // off GLED2
+			PTB->PCOR = (MASK(GLED1)); // off GLED2
+			PTB->PSOR = (MASK(GLED3)); // on GLED3
+			osDelay(2000);
+		} else {
+			PTB->PCOR = (MASK(GLED1)); // off GLED3
+			PTB->PCOR = (MASK(GLED2)); // off GLED2
+			PTB->PSOR = (MASK(GLED3)); // on GLED 1
+			osDelay(2000);
+		}
+	}
+}
+
+__NO_RETURN void GLedAll(void) {
+    /* Keep ALL green LED on when stationary */
+	for (;;) {
+		// wait for led_flag to be 2 for STOP
+		osEventFlagsWait(led_flag, 0x0002, osFlagsWaitAny, osWaitForever);
+		PTB->PSOR = (MASK(GLED1)); // on GLED1
+		PTB->PSOR = (MASK(GLED3)); // on GLED3
+		PTB->PSOR = (MASK(GLED2)); // on GLED2
+	}
+}
+
+__NO_RETURN void RLedMove(void) {
+    /* Flash red LEDs at 500ms when moving */
+	for (;;) {
+		// wait for led_flag to be 1 for MOVING
+		osEventFlagsWait(led_flag, 0x0001, osFlagsWaitAny, osWaitForever);
+		PTB->PSOR = (MASK(RLED1)); // on RLED1
+		PTB->PSOR = (MASK(RLED2)); // on RLED2
+		PTB->PSOR = (MASK(RLED3)); // on RLED3
+		osDelay(MOVE);
+		PTB->PCOR = (MASK(RLED1)); // off RLED1
+		PTB->PCOR = (MASK(RLED2)); // off RLED2
+		PTB->PCOR = (MASK(RLED3)); // off RLED3
+		osDelay(MOVE);
+	}
+} 
+
+__NO_RETURN void RLedStop(void) {
+    /* Flash red LEDs at 250ms when stationary */
+	for (;;) {
+		// wait for led_flag to be 2 for STOP
+		osEventFlagsWait(led_flag, 0x0002, osFlagsWaitAny, osWaitForever);
+		PTB->PSOR = (MASK(RLED1)); // on RLED1
+		PTB->PSOR = (MASK(RLED2)); // on RLED2
+		PTB->PSOR = (MASK(RLED3)); // on RLED3
+		osDelay(STOP);
+		PTB->PCOR = (MASK(RLED1)); // off RLED1
+		PTB->PCOR = (MASK(RLED2)); // off RLED2
+		PTB->PCOR = (MASK(RLED3)); // off RLED3
+		osDelay(STOP);
+	}
+}
+
+__NO_RETURN void greenLEDThread (void *argument) {
+	for (;;) {
+		GLedSwitch();
+		GLedAll();
+	}
+}
+
+__NO_RETURN void redLEDThread (void *argument) {
+	for (;;) {
+		RLedMove();
+		RLedStop();
+	}
 }
 
 __NO_RETURN void runningTune_thread(void* arguments) {	
@@ -414,6 +543,10 @@ __NO_RETURN void motor_thread (void *argument) {
                 TPM0_C1V = 0;
                 TPM0_C2V = 0;
                 TPM0_C3V = 0;
+                osEventFlagsSet(ledFlag, 2);
+        }
+        else {
+            osEventFlagsSet(ledFlag, 1);
         }
         // Adding a delay to avoid hogging the CPU
         osDelay(1);
@@ -452,7 +585,6 @@ __NO_RETURN void brain_thread(void *argument) {
         if (stop_data == 1) {
             osEventFlagsSet(finishFlag, 1);
         }
-
         osMessageQueuePut(xyMessage, &myXYData, NULL, 0);
         // Adding a delay to avoid hogging the CPU
         osDelay(1);
@@ -461,6 +593,7 @@ __NO_RETURN void brain_thread(void *argument) {
 
 void initEventFlags(void) {
     finishFlag = osEventFlagsNew(NULL);
+    ledFlag = osEventFlagsNew(NULL); // need to set led_flag to 0x0001 when MOVING and to 0x0002 when STOP
 }
 
 void initMessageQueue(void) {
@@ -479,6 +612,9 @@ __NO_RETURN void app_main(void *argument) {
     motor_handle         = osThreadNew(motor_thread, NULL, &motorThreadAttr);
     uart_handle          = osThreadNew(uart_thread, NULL, &uartAttr);
     brain_handle         = osThreadNew(brain_thread, NULL, &brainAttr);
+    greenLED_handle      = osThreadNew(greenLEDThread, NULL, &greenLEDThreadAttr);
+    redLED_handle        = osThreadNew(redLEDThread, NULL, &redLEDThreadAttr);
+    
     for(;;) {}
 }
 
