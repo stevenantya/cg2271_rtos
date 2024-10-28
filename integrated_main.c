@@ -396,7 +396,7 @@ __NO_RETURN void GLedSwitch_thread(void *arguments) {
 	for (;;) {
 
 		// wait for led_flag to be 1 for MOVING
-		osEventFlagsWait(ledFlag, 0x0001, osFlagsWaitAny, osWaitForever); // not sure if it is WaitAny
+		osEventFlagsWait(ledFlag, 0x0001, osFlagsNoClear, osWaitForever); 
 
 		/* checks which LED is on and turn on the next LED */
 		if (PTB->PDOR & MASK(GLED1)) {
@@ -422,7 +422,7 @@ __NO_RETURN void GLedAll_thread(void *arguments) {
     /* Keep ALL green LED on when stationary */
 	for (;;) {
 		// wait for led_flag to be 2 for STOP
-		osEventFlagsWait(ledFlag, 0x0002, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0002, osFlagsNoClear, osWaitForever);
 		PTB->PSOR = (MASK(GLED1)); // on GLED1
 		PTB->PSOR = (MASK(GLED3)); // on GLED3
 		PTB->PSOR = (MASK(GLED2)); // on GLED2
@@ -433,7 +433,7 @@ __NO_RETURN void RLedMove_thread(void *arguments) {
     /* Flash red LEDs at 500ms when moving */
 	for (;;) {
 		// wait for led_flag to be 1 for MOVING
-		osEventFlagsWait(ledFlag, 0x0001, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0001, osFlagsNoClear, osWaitForever);
 		PTB->PSOR = (MASK(RLED1)); // on RLED1
 		PTB->PSOR = (MASK(RLED2)); // on RLED2
 		PTB->PSOR = (MASK(RLED3)); // on RLED3
@@ -449,7 +449,7 @@ __NO_RETURN void RLedStop_thread(void *arguments) {
     /* Flash red LEDs at 250ms when stationary */
 	for (;;) {
 		// wait for led_flag to be 2 for STOP
-		osEventFlagsWait(ledFlag, 0x0002, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0002, osFlagsNoClear, osWaitForever);
 		PTB->PSOR = (MASK(RLED1)); // on RLED1
 		PTB->PSOR = (MASK(RLED2)); // on RLED2
 		PTB->PSOR = (MASK(RLED3)); // on RLED3
