@@ -97,6 +97,19 @@ unsigned char Q_Dequeue(Q_T *q) {
 // Queue Instance
 Q_T RxQ;
 
+/*-----------------------*
+    Message Struct
+*------------------------*/
+typedef struct 
+{
+    int8_t x_data;
+    int8_t y_data;
+} message_t;
+
+typedef struct
+{
+    char data;
+} uart_message_t;
 
 /*------------------------*
     INTERRUPTS and IRQs
@@ -118,16 +131,13 @@ void UART2_IRQHandler(void) {
 /*-------------------------*
       GLOBAL VARIABLES
 *--------------------------*/
-volatile char new_data;
-volatile int stop_data;
-volatile int x_data;
-volatile int y_data;
 
 /*----------------------------------------------------------------------------
  * Application main thread. With threads: motor_thread
  *---------------------------------------------------------------------------*/
 osThreadId_t runningTune_handle, finishTune_handle, motor_handle, uart_handle, brain_handle;
-osEventFlagsId_t newDataFlag, finishFlag, moveFlag;
+osEventFlagsId_t finishFlag;
+osMessageQueueId_t xyMessage, uartMessage;
 
 /*---Initialization----*/
 void initUART2(void) {
@@ -365,56 +375,58 @@ __NO_RETURN void finishTune_thread(void* arguments) {
 }
 
 __NO_RETURN void motor_thread (void *argument) {
-		while(1) {
-			//say the input -3,...,3 received from uart is in var X and Y
-			osEventFlagsWait(moveFlag, 1, osFlagsWaitAny, osWaitForever); //wait for move flag to be set
-
-			int Yval = y_data * 1000;
-			int Xval = x_data * 1000;
-			
-			//this is the X,Y pos decoder to Left, Right Wheel Vals
-			int leftMotorValue = Yval + Xval;
-			int rightMotorValue = Yval - Xval;
-			
-			
-			//Channel 0 and 1 is left motor, Channel 2 and 3 is right motor
-			//If C0 High and C1 Low, motor moves forward.
-			//If C0 Low and C0 High, motor moves backward.
-			//Same for C2 and C3.
-			if (leftMotorValue > 0) {
-					TPM0_C0V = leftMotorValue;
-					TPM0_C1V = 0;
-			}
-			else if (leftMotorValue < 0) {
-					TPM0_C0V = 0;
-					TPM0_C1V = leftMotorValue;
-			}
-			if (rightMotorValue > 0) {
-					TPM0_C2V = rightMotorValue;
-					TPM0_C3V = 0;
-			}
-			else if (rightMotorValue < 0) {
-					TPM0_C2V = 0;
-					TPM0_C3V = rightMotorValue;
-			}
-			
-			if (rightMotorValue == 0 && leftMotorValue == 0) {
-					TPM0_C0V = 0;
-					TPM0_C1V = 0;
-					TPM0_C2V = 0;
-					TPM0_C3V = 0;
-			}
-			// Adding a delay to avoid hogging the CPU
-			osDelay(1);
-		}
+    message_t myXYData;
+    while(1) {
+        //say the input -3,...,3 received from uart is in var X and Y
+        osMessageQueueGet(xyMessage, &myXYData, NULL, osWaitForever);
+        
+        int Yval = myXYData.y_data * 1000;
+        int Xval = myXYData.x_data * 1000;
+        
+        //this is the X,Y pos decoder to Left, Right Wheel Vals
+        int leftMotorValue = Yval + Xval;
+        int rightMotorValue = Yval - Xval;
+        
+        
+        //Channel 0 and 1 is left motor, Channel 2 and 3 is right motor
+        //If C0 High and C1 Low, motor moves forward.
+        //If C0 Low and C0 High, motor moves backward.
+        //Same for C2 and C3.
+        if (leftMotorValue > 0) {
+                TPM0_C0V = leftMotorValue;
+                TPM0_C1V = 0;
+        }
+        else if (leftMotorValue < 0) {
+                TPM0_C0V = 0;
+                TPM0_C1V = leftMotorValue;
+        }
+        if (rightMotorValue > 0) {
+                TPM0_C2V = rightMotorValue;
+                TPM0_C3V = 0;
+        }
+        else if (rightMotorValue < 0) {
+                TPM0_C2V = 0;
+                TPM0_C3V = rightMotorValue;
+        }
+        
+        if (rightMotorValue == 0 && leftMotorValue == 0) {
+                TPM0_C0V = 0;
+                TPM0_C1V = 0;
+                TPM0_C2V = 0;
+                TPM0_C3V = 0;
+        }
+        // Adding a delay to avoid hogging the CPU
+        osDelay(1);
+    }
 }
 
 __NO_RETURN void uart_thread(void *argument) {
+    uart_message_t myUARTData;
     while (1) {
         // Check if data is available in the Rx queue
         if (!Q_Empty(&RxQ)) {
-            new_data = Q_Dequeue(&RxQ);  // Dequeue received character
-            osEventFlagsSet(newDataFlag, 1); //set flag to indicate new data
+            myUARTData.data = Q_Dequeue(&RxQ);  // Dequeue received character
+            osMessageQueuePut(uartMessage, &myUARTData, NULL, 0);
         }
         // Adding a delay to avoid hogging the CPU
         osDelay(1);
@@ -422,38 +434,45 @@ __NO_RETURN void uart_thread(void *argument) {
 }
 
 __NO_RETURN void brain_thread(void *argument) {
+    message_t myXYData;
+    uart_message_t myUARTData;
     while (1) {
-        osEventFlagsWait(newDataFlag, 1, osFlagsWaitAny, osWaitForever); //wait for new data flag to be set
+        osMessageQueueGet(uartMessage, &myUARTData, NULL, osWaitForever);
         //parse new data
-        stop_data = new_data & (0b00000001);
-        x_data = ( new_data & (0b00000110) ) >> 1;
-        if (new_data & (0b00001000)) {
-            x_data = -x_data;
+        int8_t stop_data = myUARTData.data & (0b00000001);
+        myXYData.x_data = ( myUARTData.data & (0b00000110) ) >> 1;
+        if (myUARTData.data & (0b00001000)) {
+            myXYData.x_data = -myXYData.x_data;
         }
-        y_data = ( new_data & (0b00110000) ) >> 4;
-        if (new_data & (0b01000000)) {
-            y_data = -y_data;
+        myXYData.y_data = ( myUARTData.data & (0b00110000) ) >> 4;
+        if (myUARTData.data & (0b01000000)) {
+            myXYData.y_data = -myXYData.y_data;
         }
 
         if (stop_data == 1) {
             osEventFlagsSet(finishFlag, 1);
         }
-        
-        osEventFlagsSet(moveFlag, 1);
+
+        osMessageQueuePut(xyMessage, &myXYData, NULL, 0);
         // Adding a delay to avoid hogging the CPU
         osDelay(1);
     }
 }
 
 void initEventFlags(void) {
-    newDataFlag = osEventFlagsNew(NULL);
     finishFlag = osEventFlagsNew(NULL);
-    moveFlag = osEventFlagsNew(NULL);
+}
+
+void initMessageQueue(void) {
+    xyMessage = osMessageQueueNew(1, sizeof(message_t), NULL);
+    uartMessage = osMessageQueueNew(1, sizeof(uart_message_t), NULL);
 }
 
 __NO_RETURN void app_main(void *argument) {
 
     initEventFlags();
+
+    initMessageQueue();
 
     runningTune_handle   = osThreadNew(runningTune_thread, NULL, &runningTuneThreadAttr); //create thread for running tune
     finishTune_handle    = osThreadNew(finishTune_thread, NULL, &finishTuneThreadAttr); //finish thread set to higher priority to cut in when flag is set
