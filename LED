@@ -1,0 +1,161 @@
+#include "system_MKL25Z4.h"             // Keil::Device:Startup
+#include "MKL25Z4.h"
+#include "RTE_Components.h"
+#include  CMSIS_device_header
+#include "cmsis_os2.h"
+
+//ASSUME USING PORTB
+#define GLED1 0 //CHANGE to PortX Pin X
+#define GLED2 1 //CHANGE to PortX Pin X
+#define GLED3 2 //CHANGE to PortX Pin X
+#define RLED1 3 //CHANGE to PortX Pin X
+#define RLED2 4 //CHANGE to PortX Pin X
+#define RLED3 5 //CHANGE to PortX Pin X
+#define MASK(x) (1 << (x)) // Shift 1 to the left for x times
+#define MOVE 1000 //CHANGE to 500ms
+#define STOP 2000 //CHANGE to 200ms
+
+osThreadId_t greenLEDThread;
+osThreadId_t redLEDThread;
+osEventFlagsId_t led_flag;
+
+// GPIO Initialization
+void InitGPIO(void) {
+
+	// Enable clock to Port B
+	SIM->SCGC5 = (SIM_SCGC5_PORTB_MASK);
+
+	// Configure MUX to make all 6 pins GPIO
+	PORTB->PCR[GLED1] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[GLED1] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+
+	PORTB->PCR[GLED2] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[GLED2] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+
+	PORTB->PCR[GLED3] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[GLED3] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+
+	PORTB->PCR[RLED1] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RLED1] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+
+	PORTB->PCR[RLED2] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RLED2] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor;
+
+	PORTB->PCR[RLED3] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RLED3] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor;
+
+	// Set Data Direction Registers to make output
+	PTB->PDDR |= (MASK(GLED1) | MASK(GLED2) | MASK(GLED3) | MASK(RLED1) | MASK(RLED2) | MASK(RLED3));
+}
+
+/* Turns on green LED one by one when moving */
+void GLedSwtich(void) {
+	for (;;) {
+
+		// wait for led_flag to be 1 for MOVING
+		osEventFlagsWait(led_flag, 0x0001, osFlagsWaitAny, osWaitForever); // not sure if it is WaitAny
+
+		/* checks which LED is on and turn on the next LED */
+		if (PTB->PDOR & MASK(GLED1)) {
+			PTB->PCOR = (MASK(GLED1)); // off GLED1
+			PTB->PCOR = (MASK(GLED3)); // off GLED3
+			PTB->PSOR = (MASK(GLED2)); // on GLED2
+			osDelay(2000);
+		} else if (PTB->PDOR & MASK(GLED2)) {
+			PTB->PCOR = (MASK(GLED2)); // off GLED2
+			PTB->PCOR = (MASK(GLED1)); // off GLED2
+			PTB->PSOR = (MASK(GLED3)); // on GLED3
+			osDelay(2000);
+		} else {
+			PTB->PCOR = (MASK(GLED1)); // off GLED3
+			PTB->PCOR = (MASK(GLED2)); // off GLED2
+			PTB->PSOR = (MASK(GLED3)); // on GLED 1
+			osDelay(2000);
+		}
+	}
+}
+
+/* Keep ALL green LED on when stationary */
+void GLedAll(void) {
+	for (;;) {
+		// wait for led_flag to be 2 for STOP
+		osEventFlagsWait(led_flag, 0x0002, osFlagsWaitAny, osWaitForever);
+		PTB->PSOR = (MASK(GLED1)); // on GLED1
+		PTB->PSOR = (MASK(GLED3)); // on GLED3
+		PTB->PSOR = (MASK(GLED2)); // on GLED2
+	}
+}
+
+/* Flash red LEDs at 500ms when moving */
+void RLedMove(void) {
+	for (;;) {
+		// wait for led_flag to be 1 for MOVING
+		osEventFlagsWait(led_flag, 0x0001, osFlagsWaitAny, osWaitForever);
+		PTB->PSOR = (MASK(RLED1)); // on RLED1
+		PTB->PSOR = (MASK(RLED2)); // on RLED2
+		PTB->PSOR = (MASK(RLED3)); // on RLED3
+		osDelay(MOVE);
+		PTB->PCOR = (MASK(RLED1)); // off RLED1
+		PTB->PCOR = (MASK(RLED2)); // off RLED2
+		PTB->PCOR = (MASK(RLED3)); // off RLED3
+		osDelay(MOVE);
+	}
+}
+
+/* Flash red LEDs at 250ms when stationary */
+void RLedStop(void) {
+	for (;;) {
+		// wait for led_flag to be 2 for STOP
+		osEventFlagsWait(led_flag, 0x0002, osFlagsWaitAny, osWaitForever);
+		PTB->PSOR = (MASK(RLED1)); // on RLED1
+		PTB->PSOR = (MASK(RLED2)); // on RLED2
+		PTB->PSOR = (MASK(RLED3)); // on RLED3
+		osDelay(STOP);
+		PTB->PCOR = (MASK(RLED1)); // off RLED1
+		PTB->PCOR = (MASK(RLED2)); // off RLED2
+		PTB->PCOR = (MASK(RLED3)); // off RLED3
+		osDelay(STOP);
+	}
+}
+
+void greenLEDThread (void *argument) {
+	for (;;) {
+		GLedSwitch();
+		GLedAll();
+	}
+}
+
+void redLEDThread (void *argument) {
+	for (;;) {
+		RLedMove();
+		RLedStop();
+	}
+}
+
+// Delay Function
+void delay(volatile uint32_t nof) {
+    while (nof != 0) {
+        __asm("NOP");
+        nof--;
+    }
+}
+
+int main(void) {
+	InitGPIO();
+	//InitTimer();
+
+	// need to set led_flag to 0x0001 when MOVING and to 0x0002 when STOP
+
+	osKernelInitialize();
+	led_flag = osEventFlagsNew(NULL); // check if I need to stop LED
+	osThreadNew(greenLEDThread, NULL, NULL);
+	ssThreadNew(redLEDThread, NULL, NULL);
+	osKernelStart();
+
+	for (;;) {}
+
+	/* Test if can turn on LED */
+	//PTB->PCOR = (MASK(GLED1)); // off GLED1
+	//PTB->PCOR = (MASK(GLED3)); // off GLED3
+	//PTB->PSOR = (MASK(GLED2)); // on GLED2
+}
