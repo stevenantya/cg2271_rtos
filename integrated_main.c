@@ -47,12 +47,20 @@ const osThreadAttr_t brainAttr = {
     .name = "BrainThread",
     .priority = osPriorityNormal
 };
-const osThreadAttr_t redLEDThreadAttr = {
-    .name = "RedLEDThread",
+const osThreadAttr_t GLedSwitchAttr = {
+    .name = "GLedSwitchThread",
     .priority = osPriorityNormal
 };
-const osThreadAttr_t greenLEDThreadAttr = {
-    .name = "GreenLEDThread",
+const osThreadAttr_t GLedAllAttr = {
+    .name = "GLedAllThread",
+    .priority = osPriorityNormal
+};
+const osThreadAttr_t RLedMoveAttr = {
+    .name = "RLedMoveThread",
+    .priority = osPriorityNormal
+};
+const osThreadAttr_t RLedStopAttr = {
+    .name = "RLedStopThread",
     .priority = osPriorityNormal
 };
 
@@ -155,7 +163,7 @@ void UART2_IRQHandler(void) {
 /*----------------------------------------------------------------------------
  * Application main thread. With threads: motor_thread
  *---------------------------------------------------------------------------*/
-osThreadId_t greedLED_handle, redLED_handle, runningTune_handle, finishTune_handle, motor_handle, uart_handle, brain_handle;
+osThreadId_t runningTune_handle, finishTune_handle, motor_handle, uart_handle, brain_handle, GLedSwitch_handle, GLedAll_handle, RLedMove_handle, RLedStop_handle;
 osEventFlagsId_t finishFlag, ledFlag;
 osMessageQueueId_t xyMessage, uartMessage;
 
@@ -383,12 +391,12 @@ void Stop(void) {
 /*------------------------*
     THREADS
 *------------------------*/
-__NO_RETURN void GLedSwtich(void) {
+__NO_RETURN void GLedSwitch_thread(void *arguments) {
     /* Turns on green LED one by one when moving */
 	for (;;) {
 
 		// wait for led_flag to be 1 for MOVING
-		osEventFlagsWait(led_flag, 0x0001, osFlagsWaitAny, osWaitForever); // not sure if it is WaitAny
+		osEventFlagsWait(ledFlag, 0x0001, osFlagsWaitAny, osWaitForever); // not sure if it is WaitAny
 
 		/* checks which LED is on and turn on the next LED */
 		if (PTB->PDOR & MASK(GLED1)) {
@@ -410,22 +418,22 @@ __NO_RETURN void GLedSwtich(void) {
 	}
 }
 
-__NO_RETURN void GLedAll(void) {
+__NO_RETURN void GLedAll_thread(void *arguments) {
     /* Keep ALL green LED on when stationary */
 	for (;;) {
 		// wait for led_flag to be 2 for STOP
-		osEventFlagsWait(led_flag, 0x0002, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0002, osFlagsWaitAny, osWaitForever);
 		PTB->PSOR = (MASK(GLED1)); // on GLED1
 		PTB->PSOR = (MASK(GLED3)); // on GLED3
 		PTB->PSOR = (MASK(GLED2)); // on GLED2
 	}
 }
 
-__NO_RETURN void RLedMove(void) {
+__NO_RETURN void RLedMove_thread(void *arguments) {
     /* Flash red LEDs at 500ms when moving */
 	for (;;) {
 		// wait for led_flag to be 1 for MOVING
-		osEventFlagsWait(led_flag, 0x0001, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0001, osFlagsWaitAny, osWaitForever);
 		PTB->PSOR = (MASK(RLED1)); // on RLED1
 		PTB->PSOR = (MASK(RLED2)); // on RLED2
 		PTB->PSOR = (MASK(RLED3)); // on RLED3
@@ -437,11 +445,11 @@ __NO_RETURN void RLedMove(void) {
 	}
 } 
 
-__NO_RETURN void RLedStop(void) {
+__NO_RETURN void RLedStop_thread(void *arguments) {
     /* Flash red LEDs at 250ms when stationary */
 	for (;;) {
 		// wait for led_flag to be 2 for STOP
-		osEventFlagsWait(led_flag, 0x0002, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0002, osFlagsWaitAny, osWaitForever);
 		PTB->PSOR = (MASK(RLED1)); // on RLED1
 		PTB->PSOR = (MASK(RLED2)); // on RLED2
 		PTB->PSOR = (MASK(RLED3)); // on RLED3
@@ -450,20 +458,6 @@ __NO_RETURN void RLedStop(void) {
 		PTB->PCOR = (MASK(RLED2)); // off RLED2
 		PTB->PCOR = (MASK(RLED3)); // off RLED3
 		osDelay(STOP);
-	}
-}
-
-__NO_RETURN void greenLEDThread (void *argument) {
-	for (;;) {
-		GLedSwitch();
-		GLedAll();
-	}
-}
-
-__NO_RETURN void redLEDThread (void *argument) {
-	for (;;) {
-		RLedMove();
-		RLedStop();
 	}
 }
 
@@ -612,9 +606,10 @@ __NO_RETURN void app_main(void *argument) {
     motor_handle         = osThreadNew(motor_thread, NULL, &motorThreadAttr);
     uart_handle          = osThreadNew(uart_thread, NULL, &uartAttr);
     brain_handle         = osThreadNew(brain_thread, NULL, &brainAttr);
-    greenLED_handle      = osThreadNew(greenLEDThread, NULL, &greenLEDThreadAttr);
-    redLED_handle        = osThreadNew(redLEDThread, NULL, &redLEDThreadAttr);
-    
+    GLedSwitch_handle      = osThreadNew(GLedSwitch_thread, NULL, &GLedSwitchAttr);
+    GLedAll_handle        = osThreadNew(GLedAll_thread, NULL, &GLedAllAttr);
+    RLedMove_handle       = osThreadNew(RLedMove_thread, NULL, &RLedMoveAttr);
+    RLedStop_handle       = osThreadNew(RLedStop_thread, NULL, &RLedStopAttr);
     for(;;) {}
 }
 
