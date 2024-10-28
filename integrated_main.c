@@ -537,13 +537,12 @@ __NO_RETURN void motor_thread (void *argument) {
                 TPM0_C1V = 0;
                 TPM0_C2V = 0;
                 TPM0_C3V = 0;
-                osEventFlagsSet(ledFlag, 2);
 		osEventFlagsClear(ledFlag, 1);
+                osEventFlagsSet(ledFlag, 2);
         }
         else {
-            osEventFlagsSet(ledFlag, 1);
 		osEventFlagsClear(ledFlag, 2);
-		
+            osEventFlagsSet(ledFlag, 1);
         }
         // Adding a delay to avoid hogging the CPU
         osDelay(1);
