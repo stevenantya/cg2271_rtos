@@ -458,35 +458,35 @@ __NO_RETURN void RLedStop_thread(void *arguments) {
 
 __NO_RETURN void runningTune_thread(void* arguments) {	
 	for(;;) {
-		//PlayC();
-		//osDelay(24000000);
-		//Stop();
-		//osDelay(24000000);
+		PlayC();
+		osDelay(24000000);
+		Stop();
+		osDelay(24000000);
 		
-		onLED(1, GREEN_LED);
-		osDelay(1000000);
-		offLED(1, GREEN_LED);
-		osDelay(1000000);
-		osEventFlagsSet(finishFlag, 1);
+		// onLED(1, GREEN_LED);
+		// osDelay(1000000);
+		// offLED(1, GREEN_LED);
+		// osDelay(1000000);
+		// osEventFlagsSet(finishFlag, 1);
 	}
 }
 
 __NO_RETURN void finishTune_thread(void* arguments) { 
 	for(;;) {	
 		osEventFlagsWait(finishFlag, 1, osFlagsWaitAny, 	osWaitForever); //wait for the finish flag to be set
-		//PlayG();
-		//osDelay(12000000);
-		//PlayA();
-		//osDelay(12000000);
-		//PlayB();
-		//osDelay(12000000);
-		//Stop();
-		//osDelay(12000000);
+		PlayG();
+		osDelay(12000000);
+		PlayA();
+		osDelay(12000000);
+		PlayB();
+		osDelay(12000000);
+		Stop();
+		osDelay(12000000);
 		
-		onLED(1, RED_LED);
-		osDelay(1000000);
-		offLED(1, RED_LED);
-		osDelay(1000000);
+		// onLED(1, RED_LED);
+		// osDelay(1000000);
+		// offLED(1, RED_LED);
+		// osDelay(1000000);
         
         //
 	}
