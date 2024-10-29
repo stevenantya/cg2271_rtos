@@ -1,6 +1,5 @@
-#include <ps5Controller.h>  // Include PS5 controller library
+#include <ps5Controller.h> 
 bool stopBit = 0;
-
 void setup() {
     Serial.begin(19200);    // Initialize Serial (connected to RX0)
     Serial2.begin(19200, SERIAL_8N1, 16, 17);  // Initialize UART communication on Serial2 (RX2 on PIN 16, TX2 on PIN 17), baud rate set to 19200
@@ -9,51 +8,55 @@ void setup() {
     ps5.begin("ac:36:1b:e1:fd:05");
     Serial.println("Ready to connect to PS5 controller...");
 }
-
 void loop() {
     if (ps5.isConnected()) {
         // Use left joystick (forward/backward movement)
-        if (stopBit == 0) {
-            stopBit = ps5.Cross();
+        if(stopBit == 0)
+        {
+          stopBit = ps5.Cross();
         }
-        int yValue = ps5.LStickY();  // Get the left stick Y-axis value for movement control
-        int xValue = ps5.LStickX();  // Get the left stick X-axis value for movement control
+        int yValue = ps5.LStickY();  
+        int xValue = ps5.LStickX(); 
+        // Serial.println(yValue);
 
-        // Map X and Y values to 2-bit data with a sign bit
-        uint8_t xMapped = (abs(xValue) >> 6) & 0b11;  // Map from -128 to 127 into 0 to 3 (2 bits)
-        uint8_t yMapped = (abs(yValue) >> 6) & 0b11;  // Map from -128 to 127 into 0 to 3 (2 bits)
-
+       
+        int xAbs = (abs(xValue) > 127) ? abs(xValue) - 1 : abs(xValue);
+        int yAbs = (abs(yValue) > 127) ? abs(yValue) - 1 : abs(yValue);
+        // Serial.println(yAbs);
+        uint8_t xMapped = (xAbs >> 5) & 0b011;  
+        uint8_t yMapped = (yAbs >> 5) & 0b011;  
+        // Serial.println(yMapped);
         // Add sign bit: 0 for positive, 1 for negative
         uint8_t xSign = (xValue < 0) ? 1 : 0;
         uint8_t ySign = (yValue < 0) ? 1 : 0;
-
+        // Serial.println(yMapped | (ySign << 2));
         // Combine X and Y into a single 6-bit data: [xSign, xMapped, ySign, yMapped]
-        uint8_t combinedData = (xSign << 5) | (xMapped << 3) | (ySign << 2) | yMapped | stopBit;
-
+        uint8_t combinedData = (xSign << 6) | (xMapped << 4) | (ySign << 3) | (yMapped << 1) | stopBit;
+      
         // Send the combined data through Serial2
         Serial2.write(combinedData);
-        Serial2.flush();  // Ensure transmission is complete
         
         // Debugging output
-        Serial.print("Sent combined data: ");
-        Serial.println(combinedData, BIN);
+        //Serial.print("Sent combined data: ");
+        //Serial.println(combinedData, BIN);
 
-        delay(100);  // Delay to prevent sending commands too frequently
+        delay(500);  // Delay to prevent sending commands too frequently
     }
 
     // Check for received data on Serial2 (RX2)
     if (Serial2.available() > 0) {
         char receivedChar = Serial2.read();
-        // Debugging: Print received data as character and binary format
-        Serial.print("Received data: ");
-        Serial.println(receivedChar);
+        //Serial.print("Received data: ");
+        //Serial.println(receivedChar);  // Display the received data as a character
         
+        // Convert to binary format
         Serial.print("Received data in binary: ");
         printBinary(receivedChar);
         Serial.println();  // New line for readability
     }
+    
 
-    delay(100);  // Delay to prevent sending commands too frequently
+    delay(500);  // Delay to prevent sending commands too frequently
 }
 
 void printBinary(char c) {
