@@ -391,7 +391,7 @@ __NO_RETURN void GLedSwitch_thread(void *arguments) {
 	for (;;) {
 
 		// wait for led_flag to be 1 for MOVING
-		osEventFlagsWait(ledFlag, 0x0001, osFlagsWaitAny, osWaitForever); // not sure if it is WaitAny
+		osEventFlagsWait(ledFlag, 0x0001, osFlagsNoClear, osWaitForever); // not sure if it is WaitAny
 
 		/* checks which LED is on and turn on the next LED */
 		if (PTC->PDOR & MASK(GLED1)) {
@@ -417,7 +417,7 @@ __NO_RETURN void GLedAll_thread(void *arguments) {
     /* Keep ALL green LED on when stationary */
 	for (;;) {
 		// wait for led_flag to be 2 for STOP
-		osEventFlagsWait(ledFlag, 0x0002, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0002, osFlagsNoClear, osWaitForever);
 		PTC->PSOR = (MASK(GLED1)); // on GLED1
 		PTC->PSOR = (MASK(GLED3)); // on GLED3
 		PTC->PSOR = (MASK(GLED2)); // on GLED2
@@ -428,7 +428,7 @@ __NO_RETURN void RLedMove_thread(void *arguments) {
     /* Flash red LEDs at 500ms when moving */
 	for (;;) {
 		// wait for led_flag to be 1 for MOVING
-		osEventFlagsWait(ledFlag, 0x0001, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0001, osFlagsNoClear, osWaitForever);
 		PTC->PSOR = (MASK(RLED1)); // on RLED1
 		PTC->PSOR = (MASK(RLED2)); // on RLED2
 		PTC->PSOR = (MASK(RLED3)); // on RLED3
@@ -444,7 +444,7 @@ __NO_RETURN void RLedStop_thread(void *arguments) {
     /* Flash red LEDs at 250ms when stationary */
 	for (;;) {
 		// wait for led_flag to be 2 for STOP
-		osEventFlagsWait(ledFlag, 0x0002, osFlagsWaitAny, osWaitForever);
+		osEventFlagsWait(ledFlag, 0x0002, osFlagsNoClear, osWaitForever);
 		PTC->PSOR = (MASK(RLED1)); // on RLED1
 		PTC->PSOR = (MASK(RLED2)); // on RLED2
 		PTC->PSOR = (MASK(RLED3)); // on RLED3
@@ -532,9 +532,11 @@ __NO_RETURN void motor_thread (void *argument) {
                 TPM0_C1V = 0;
                 TPM0_C2V = 0;
                 TPM0_C3V = 0;
+                osEventFlagsClear(ledFlag, 1);
                 osEventFlagsSet(ledFlag, 2);
         }
         else {
+            osEventFlagsClear(ledFlag, 2);
             osEventFlagsSet(ledFlag, 1);
         }
         // Adding a delay to avoid hogging the CPU
