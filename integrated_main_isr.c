@@ -499,7 +499,24 @@ __NO_RETURN void motor_thread (void *argument) {
         osMessageQueueGet(xyMessage, &myXYData, NULL, osWaitForever);
         
         int Yval = myXYData.y_data * 1000;
+        if (Yval == 1000)
+            Yval = 2000;
+        else if (Yval == 2000)
+            Yval = 2500;
+        else if (Yval == -1000)
+            Yval = -2000;
+        else if (Yval == -2000)
+            Yval = -2500;
+        
         int Xval = myXYData.x_data * 1000;
+        if (Xval == 1000)
+            Xval = 2000;
+        else if (Xval == 2000)
+            Xval = 2500;
+        else if (Xval == -1000)
+            Xval = -2000;
+        else if (Xval == -2000)
+            Xval = -2500;
         
         //this is the X,Y pos decoder to Left, Right Wheel Vals
         int leftMotorValue = Yval + Xval;
