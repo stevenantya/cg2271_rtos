@@ -205,8 +205,8 @@ void initTPM(void) {
     TPM0->SC &= ~TPM_SC_CPWMS_MASK;
     
     //channel 0 config for edge-aligned pwm
-    TPM0_C0SC &= ~(TPM_CnSC_ELSB_MASK | TPM_CnSC_ELSA_MASK | TPM_CnSC_MSB_MASK | TPM_CnSC_MSA_MASK);
-    TPM0_C0SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1));
+    TPM0_C4SC &= ~(TPM_CnSC_ELSB_MASK | TPM_CnSC_ELSA_MASK | TPM_CnSC_MSB_MASK | TPM_CnSC_MSA_MASK);
+    TPM0_C4SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1));
     
     TPM0_C1SC &= ~(TPM_CnSC_ELSB_MASK | TPM_CnSC_ELSA_MASK | TPM_CnSC_MSB_MASK | TPM_CnSC_MSA_MASK);
     TPM0_C1SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1));
@@ -233,20 +233,20 @@ void initTPM(void) {
 }
 
 void initMotor(void) {
-    //clear function for portd 0,1,2 and 3
-    PORTD->PCR[0] &= ~PORT_PCR_MUX_MASK;
+    //clear function for portd 4,1,2 and 3
+    PORTD->PCR[4] &= ~PORT_PCR_MUX_MASK;
     PORTD->PCR[1] &= ~PORT_PCR_MUX_MASK;
     PORTD->PCR[2] &= ~PORT_PCR_MUX_MASK;
     PORTD->PCR[3] &= ~PORT_PCR_MUX_MASK;
     
     //turn on pwm for portd 0,1, 2 and 3
-    PORTD->PCR[0] |= PORT_PCR_MUX(4);
+    PORTD->PCR[4] |= PORT_PCR_MUX(4);
     PORTD->PCR[1] |= PORT_PCR_MUX(4);
     PORTD->PCR[2] |= PORT_PCR_MUX(4);
     PORTD->PCR[3] |= PORT_PCR_MUX(4);
     
     //SET Mod value for TPM0
-    TPM0->MOD = 6000;
+    TPM0->MOD = 10000;
 }
 
 void initBuzzer(void)
@@ -498,43 +498,37 @@ __NO_RETURN void motor_thread (void *argument) {
         //say the input -3,...,3 received from uart is in var X and Y
         osMessageQueueGet(xyMessage, &myXYData, NULL, osWaitForever);
         
-        int Yval = myXYData.y_data * 1000;
-        if (Yval == 1000)
-            Yval = 2000;
-        else if (Yval == 2000)
-            Yval = 2500;
-        else if (Yval == -1000)
-            Yval = -2000;
-        else if (Yval == -2000)
-            Yval = -2500;
-        
-        int Xval = myXYData.x_data * 1000;
-        if (Xval == 1000)
-            Xval = 2000;
-        else if (Xval == 2000)
-            Xval = 2500;
-        else if (Xval == -1000)
-            Xval = -2000;
-        else if (Xval == -2000)
-            Xval = -2500;
+        int Yval = 0;
+        if (myXYData.y_data != 0) {
+            Yval = (myXYData.y_data * 2500/3) + 7500;
+        }
+				
+        int Xval = myXYData.x_data * 2500/ 3; //1/3 OF 1000K
         
         //this is the X,Y pos decoder to Left, Right Wheel Vals
-        int leftMotorValue = Yval + Xval;
-        int rightMotorValue = Yval - Xval;
+        int leftMotorValue = Yval;
+        int rightMotorValue = Yval;
         
-        
-        //Channel 0 and 1 is left motor, Channel 2 and 3 is right motor
-        //If C0 High and C1 Low, motor moves forward.
-        //If C0 Low and C0 High, motor moves backward.
+        if (Xval > 0) {
+					rightMotorValue -= Xval;
+        }
+        else if (Xval < 0) {
+            leftMotorValue += Xval; //since Xval is negative.
+        }
+				
+        //Channel 4 and 1 is left motor, Channel 2 and 3 is right motor
+        //If C4 High and C1 Low, motor moves forward.
+        //If C1 Low and C4 High, motor moves backward.
         //Same for C2 and C3.
         if (leftMotorValue > 0) {
-                TPM0_C0V = leftMotorValue;
+                TPM0_C4V = leftMotorValue;
                 TPM0_C1V = 0;
         }
         else if (leftMotorValue < 0) {
-                TPM0_C0V = 0;
+                TPM0_C4V = 0;
                 TPM0_C1V = leftMotorValue;
         }
+				
         if (rightMotorValue > 0) {
                 TPM0_C2V = rightMotorValue;
                 TPM0_C3V = 0;
@@ -545,7 +539,7 @@ __NO_RETURN void motor_thread (void *argument) {
         }
         
         if (rightMotorValue == 0 && leftMotorValue == 0) {
-                TPM0_C0V = 0;
+                TPM0_C4V = 0;
                 TPM0_C1V = 0;
                 TPM0_C2V = 0;
                 TPM0_C3V = 0;
