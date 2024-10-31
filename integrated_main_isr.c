@@ -342,40 +342,39 @@ void offLED(int port, int ID_LED) {
 	}
 }
 
-void PlayC(void) {
-	TPM1->MOD = 1432; //controls frequency generated freq desired
-	TPM1_C0V = TPM1->MOD / 2; //controls duty cycle relative to frequency, e.g. 50% duty cycle = TPM1->MOD / 2
-
+void PlayG4(void) {
+    TPM1->MOD = 478;            //controls frequency generated freq desired (392 Hz)
+    TPM1_C0V = TPM1->MOD / 2;   //controls duty cycle relative to frequency, e.g. 50% duty cycle = TPM1->MOD / 2
 }
 
-void PlayD(void) {
-    TPM1->MOD = 1276;
-    TPM1_C0V = TPM1->MOD / 4;
+void PlayD5(void) {
+    TPM1->MOD = 318;            //587 Hz
+    TPM1_C0V = TPM1->MOD / 2;   
 }
 
-void PlayE(void) {
-    TPM1->MOD = 1136;
-    TPM1_C0V = TPM1->MOD / 4;
+void PlayC5(void) {
+    TPM1->MOD = 358;            //523 Hz
+    TPM1_C0V = TPM1->MOD / 2;   
 }
 
-void PlayF(void) {
-    TPM1->MOD = 1075;
-    TPM1_C0V = TPM1->MOD / 4;
+void PlayAS4(void) {
+    TPM1->MOD = 402;            //466 Hz
+    TPM1_C0V = TPM1->MOD / 2;   
 }
 
-void PlayG(void) {
-    TPM1->MOD = 956;
-    TPM1_C0V = TPM1->MOD / 4;
+void PlayA4(void) {
+    TPM1->MOD = 425;            //440 Hz
+    TPM1_C0V = TPM1->MOD / 2;   
 }
 
-void PlayA(void) {
-    TPM1->MOD = 852;
-    TPM1_C0V = TPM1->MOD / 4;
+void PlayAS5(void) {
+    TPM1->MOD = 200;            //932 Hz
+    TPM1_C0V = TPM1->MOD / 2;   
 }
 
-void PlayB(void) {
-    TPM1->MOD = 759;
-    TPM1_C0V = TPM1->MOD / 4;
+void PlayA5(void) {
+    TPM1->MOD = 212;            //880 Hz
+    TPM1_C0V = TPM1->MOD / 2;   
 }
 
 void Stop(void) {
@@ -458,16 +457,18 @@ __NO_RETURN void RLedStop_thread(void *arguments) {
 
 __NO_RETURN void runningTune_thread(void* arguments) {	
 	for(;;) {
-		PlayC();
-		osDelay(24000000);
-		Stop();
-		osDelay(24000000);
-		
-		// onLED(1, GREEN_LED);
-		// osDelay(1000000);
-		// offLED(1, GREEN_LED);
-		// osDelay(1000000);
-		// osEventFlagsSet(finishFlag, 1);
+		PlayG4(); osDelay(12000000); StopSound(); osDelay(12000000);  
+		PlayG4(); osDelay(12000000); PlayD5(); osDelay(12000000);     
+		PlayC5(); osDelay(12000000); StopSound(); osDelay(12000000);  
+		PlayAS4(); osDelay(12000000); StopSound(); osDelay(12000000); 
+		PlayA4(); osDelay(12000000); StopSound(); osDelay(12000000);  
+		PlayA4(); osDelay(12000000); PlayA4(); osDelay(12000000);     
+		PlayC5(); osDelay(12000000); StopSound(); osDelay(12000000); 
+		PlayAS4(); osDelay(12000000); PlayA4(); osDelay(12000000);
+		PlayG4(); osDelay(12000000); StopSound(); osDelay(12000000);
+		PlayG4(); osDelay(12000000); PlayAS5(); osDelay(12000000);
+		PlayA5(); osDelay(12000000); PlayAS5(); osDelay(12000000);
+		PlayA5(); osDelay(12000000); PlayAS5(); osDelay(12000000);
 	}
 }
 
