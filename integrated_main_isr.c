@@ -382,6 +382,27 @@ void Stop(void) {
 	TPM1_C0V = 0;
 }
 
+
+void PlayE5(void) {
+    TPM1->MOD = 284;           // 659.25 Hz
+    TPM1_C0V = TPM1->MOD / 2;
+}
+
+void PlayC5(void) {
+    TPM1->MOD = 419;           //523.25 Hz
+    TPM1_C0V = TPM1->MOD / 2;
+}
+
+void PlayG5(void) {
+    TPM1->MOD = 238;           //784.00 Hz
+    TPM1_C0V = TPM1->MOD / 2;
+}
+
+void PlayG4(void) {
+    TPM1->MOD = 500;           //392.00 Hz
+    TPM1_C0V = TPM1->MOD / 2;
+}
+
 /*------------------------*
     THREADS
 *------------------------*/
@@ -474,22 +495,20 @@ __NO_RETURN void runningTune_thread(void* arguments) {
 
 __NO_RETURN void finishTune_thread(void* arguments) { 
 	for(;;) {	
-		osEventFlagsWait(finishFlag, 1, osFlagsWaitAny, 	osWaitForever); //wait for the finish flag to be set
-		PlayG();
-		osDelay(12000000);
-		PlayA();
-		osDelay(12000000);
-		PlayB();
-		osDelay(12000000);
-		Stop();
-		osDelay(12000000);
-		
-		// onLED(1, RED_LED);
-		// osDelay(1000000);
-		// offLED(1, RED_LED);
-		// osDelay(1000000);
-        
-        //
+		osEventFlagsWait(finishFlag, 1, osFlagsWaitAny, osWaitForever); //wait for the finish flag to be set
+		PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000); 
+    		PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000
+	    	StopSound(); osDelay(12000000); 
+	    	PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000);    
+	   	StopSound(); osDelay(12000000); 
+	    	PlayC5(); osDelay(12000000); StopSound(); osDelay(12000000);    
+	    	PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000);    
+	
+	    	
+	    	PlayG5(); osDelay(12000000);    StopSound(); osDelay(0);    
+	    	StopSound(); osDelay(12000000);  
+	    	PlayG4(); osDelay(12000000);    StopSound(); osDelay(0);    
+	    	StopSound(); osDelay(12000000);  
 	}
 }
 
