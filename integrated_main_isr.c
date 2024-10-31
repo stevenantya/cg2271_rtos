@@ -497,7 +497,7 @@ __NO_RETURN void finishTune_thread(void* arguments) {
 	for(;;) {	
 		osEventFlagsWait(finishFlag, 1, osFlagsWaitAny, osWaitForever); //wait for the finish flag to be set
 		PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000); 
-    		PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000
+    		PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000);
 	    	StopSound(); osDelay(12000000); 
 	    	PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000);    
 	   	StopSound(); osDelay(12000000); 
