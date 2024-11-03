@@ -518,19 +518,22 @@ __NO_RETURN void motor_thread (void *argument) {
         //say the input -3,...,3 received from uart is in var X and Y
         osMessageQueueGet(xyMessage, &myXYData, NULL, osWaitForever);
         
+        int y_data = myXYData.y_data;
+        int x_data = myXYData.x_data;
+
         int Yval = 0;
-        if (myXYData.y_data != 0) {
-            Yval = (myXYData.y_data * 2500/3) + 7500;
+        if (y_data != 0) {
+            Yval = (y_data * 2500/3) + 7500;
         }
 				
-        int Xval = myXYData.x_data * 2500/ 3; //1/3 OF 1000K
+        int Xval = x_data * 2500/ 3; //1/3 OF 1000K
         
         //this is the X,Y pos decoder to Left, Right Wheel Vals
         int leftMotorValue = Yval;
         int rightMotorValue = Yval;
         
         if (Xval > 0) {
-					rightMotorValue -= Xval;
+			rightMotorValue -= Xval;
         }
         else if (Xval < 0) {
             leftMotorValue += Xval; //since Xval is negative.
@@ -541,28 +544,32 @@ __NO_RETURN void motor_thread (void *argument) {
         //If C1 Low and C4 High, motor moves backward.
         //Same for C2 and C3.
         if (leftMotorValue > 0) {
-                TPM0_C4V = leftMotorValue;
+                TPM0_C4V = (leftMotorValue > 10000) ? 10000 : leftMotorValue;;
                 TPM0_C1V = 0;
         }
         else if (leftMotorValue < 0) {
                 TPM0_C4V = 0;
-                TPM0_C1V = leftMotorValue;
+                TPM0_C1V = (leftMotorValue > 10000) ? 10000 : leftMotorValue;;
+        } 
+        else {
+            TPM0_C4V = 0;
+            TPM0_C1V = 0;
         }
 				
         if (rightMotorValue > 0) {
-                TPM0_C2V = rightMotorValue;
+                TPM0_C2V = (rightMotorValue > 10000) ? 10000 : rightMotorValue;
                 TPM0_C3V = 0;
         }
         else if (rightMotorValue < 0) {
                 TPM0_C2V = 0;
-                TPM0_C3V = rightMotorValue;
+                TPM0_C3V = (rightMotorValue > 10000) ? 10000 : rightMotorValue;
+        }
+        else {
+            TPM0_C2V = 0;
+            TPM0_C3V = 0;
         }
         
         if (rightMotorValue == 0 && leftMotorValue == 0) {
-                TPM0_C4V = 0;
-                TPM0_C1V = 0;
-                TPM0_C2V = 0;
-                TPM0_C3V = 0;
                 osEventFlagsClear(ledFlag, 1);
                 osEventFlagsSet(ledFlag, 2);
         }
