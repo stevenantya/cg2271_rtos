@@ -388,20 +388,14 @@ void PlayE5(void) {
     TPM1_C0V = TPM1->MOD / 2;
 }
 
-void PlayC5(void) {
-    TPM1->MOD = 419;           //523.25 Hz
-    TPM1_C0V = TPM1->MOD / 2;
-}
+
 
 void PlayG5(void) {
     TPM1->MOD = 238;           //784.00 Hz
     TPM1_C0V = TPM1->MOD / 2;
 }
 
-void PlayG4(void) {
-    TPM1->MOD = 500;           //392.00 Hz
-    TPM1_C0V = TPM1->MOD / 2;
-}
+
 
 /*------------------------*
     THREADS
@@ -478,15 +472,15 @@ __NO_RETURN void RLedStop_thread(void *arguments) {
 
 __NO_RETURN void runningTune_thread(void* arguments) {	
 	for(;;) {
-		PlayG4(); osDelay(12000000); StopSound(); osDelay(12000000);  
+		PlayG4(); osDelay(12000000); Stop(); osDelay(12000000);  
 		PlayG4(); osDelay(12000000); PlayD5(); osDelay(12000000);     
-		PlayC5(); osDelay(12000000); StopSound(); osDelay(12000000);  
-		PlayAS4(); osDelay(12000000); StopSound(); osDelay(12000000); 
-		PlayA4(); osDelay(12000000); StopSound(); osDelay(12000000);  
+		PlayC5(); osDelay(12000000); Stop(); osDelay(12000000);  
+		PlayAS4(); osDelay(12000000); Stop(); osDelay(12000000); 
+		PlayA4(); osDelay(12000000); Stop(); osDelay(12000000);  
 		PlayA4(); osDelay(12000000); PlayA4(); osDelay(12000000);     
-		PlayC5(); osDelay(12000000); StopSound(); osDelay(12000000); 
+		PlayC5(); osDelay(12000000); Stop(); osDelay(12000000); 
 		PlayAS4(); osDelay(12000000); PlayA4(); osDelay(12000000);
-		PlayG4(); osDelay(12000000); StopSound(); osDelay(12000000);
+		PlayG4(); osDelay(12000000); Stop(); osDelay(12000000);
 		PlayG4(); osDelay(12000000); PlayAS5(); osDelay(12000000);
 		PlayA5(); osDelay(12000000); PlayAS5(); osDelay(12000000);
 		PlayA5(); osDelay(12000000); PlayAS5(); osDelay(12000000);
@@ -496,84 +490,87 @@ __NO_RETURN void runningTune_thread(void* arguments) {
 __NO_RETURN void finishTune_thread(void* arguments) { 
 	for(;;) {	
 		osEventFlagsWait(finishFlag, 1, osFlagsWaitAny, osWaitForever); //wait for the finish flag to be set
-		PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000); 
-    		PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000);
-	    	StopSound(); osDelay(12000000); 
-	    	PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000);    
-	   	StopSound(); osDelay(12000000); 
-	    	PlayC5(); osDelay(12000000); StopSound(); osDelay(12000000);    
-	    	PlayE5(); osDelay(12000000); StopSound(); osDelay(12000000);    
+		PlayE5(); osDelay(12000000); Stop(); osDelay(12000000); 
+    		PlayE5(); osDelay(12000000); Stop(); osDelay(12000000);
+	    	Stop(); osDelay(12000000); 
+	    	PlayE5(); osDelay(12000000); Stop(); osDelay(12000000);    
+	   	Stop(); osDelay(12000000); 
+	    	PlayC5(); osDelay(12000000); Stop(); osDelay(12000000);    
+	    	PlayE5(); osDelay(12000000); Stop(); osDelay(12000000);    
 	
 	    	
-	    	PlayG5(); osDelay(12000000);    StopSound(); osDelay(0);    
-	    	StopSound(); osDelay(12000000);  
-	    	PlayG4(); osDelay(12000000);    StopSound(); osDelay(0);    
-	    	StopSound(); osDelay(12000000);  
+	    	PlayG5(); osDelay(12000000);    Stop(); osDelay(0);    
+	    	Stop(); osDelay(12000000);  
+	    	PlayG4(); osDelay(12000000);    Stop(); osDelay(0);    
+	    	Stop(); osDelay(12000000);  
 	}
 }
 
 __NO_RETURN void motor_thread (void *argument) {
     message_t myXYData;
-    while(1) {
-        //say the input -3,...,3 received from uart is in var X and Y
+    while (1) {
+        // Retrieve input data from the message queue
         osMessageQueueGet(xyMessage, &myXYData, NULL, osWaitForever);
         
-        int Yval = 0;
-        if (myXYData.y_data != 0) {
-            Yval = (myXYData.y_data * 2500/3) + 7500;
-        }
-				
-        int Xval = myXYData.x_data * 2500/ 3; //1/3 OF 1000K
-        
-        //this is the X,Y pos decoder to Left, Right Wheel Vals
-        int leftMotorValue = Yval;
-        int rightMotorValue = Yval;
-        
-        if (Xval > 0) {
-					rightMotorValue -= Xval;
-        }
-        else if (Xval < 0) {
-            leftMotorValue += Xval; //since Xval is negative.
-        }
-				
-        //Channel 4 and 1 is left motor, Channel 2 and 3 is right motor
-        //If C4 High and C1 Low, motor moves forward.
-        //If C1 Low and C4 High, motor moves backward.
-        //Same for C2 and C3.
+        // Multiply received input (-3 to 3) by 3333 to achieve a range suitable for TPM duty cycle values (max 9999)
+        int Yval = myXYData.y_data * 3333;
+        int Xval = myXYData.x_data * 3333;
+
+        // X, Y position decoder to determine Left and Right motor values
+        int leftMotorValue = Yval + Xval;
+        int rightMotorValue = Yval - Xval;
+
+        // Channel 4 and 1 control the left motor
+        // Channel 2 and 3 control the right motor
+        // If C4 High and C1 Low, motor moves forward.
+        // If C1 Low and C4 High, motor moves backward.
+        // Same for C2 and C3.
+
+        // Control the left motor
         if (leftMotorValue > 0) {
-                TPM0_C4V = leftMotorValue;
-                TPM0_C1V = 0;
+            // Set C4 (forward) and clear C1
+            TPM0_C4V = (leftMotorValue > 10000) ? 10000 : leftMotorValue;
+            TPM0_C1V = 0;
+        } else if (leftMotorValue < 0) {
+            // Set C1 (backward) and clear C4
+            TPM0_C4V = 0;
+            TPM0_C1V = (abs(leftMotorValue) > 10000) ? 10000 : abs(leftMotorValue);
+        } else {
+            // Stop the left motor
+            TPM0_C4V = 0;
+            TPM0_C1V = 0;
         }
-        else if (leftMotorValue < 0) {
-                TPM0_C4V = 0;
-                TPM0_C1V = leftMotorValue;
-        }
-				
+
+        // Control the right motor
         if (rightMotorValue > 0) {
-                TPM0_C2V = rightMotorValue;
-                TPM0_C3V = 0;
+            // Set C2 (forward) and clear C3
+            TPM0_C2V = (rightMotorValue > 10000) ? 10000 : rightMotorValue;
+            TPM0_C3V = 0;
+        } else if (rightMotorValue < 0) {
+            // Set C3 (backward) and clear C2
+            TPM0_C2V = 0;
+            TPM0_C3V = (abs(rightMotorValue) > 10000) ? 10000 : abs(rightMotorValue);
+        } else {
+            // Stop the right motor
+            TPM0_C2V = 0;
+            TPM0_C3V = 0;
         }
-        else if (rightMotorValue < 0) {
-                TPM0_C2V = 0;
-                TPM0_C3V = rightMotorValue;
-        }
-        
+
+        // If both motors are stopped, clear flag 1 and set flag 2
         if (rightMotorValue == 0 && leftMotorValue == 0) {
-                TPM0_C4V = 0;
-                TPM0_C1V = 0;
-                TPM0_C2V = 0;
-                TPM0_C3V = 0;
-                osEventFlagsClear(ledFlag, 1);
-                osEventFlagsSet(ledFlag, 2);
-        }
-        else {
+            osEventFlagsClear(ledFlag, 1);
+            osEventFlagsSet(ledFlag, 2);
+        } else {
+            // If either motor is running, clear flag 2 and set flag 1
             osEventFlagsClear(ledFlag, 2);
             osEventFlagsSet(ledFlag, 1);
         }
+
         // Adding a delay to avoid hogging the CPU
         osDelay(1);
     }
 }
+
 
 __NO_RETURN void brain_thread(void *argument) {
     message_t myXYData;
