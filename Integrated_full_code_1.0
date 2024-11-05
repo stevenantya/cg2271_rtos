@@ -22,8 +22,8 @@
 #define RLED2 5 //CHANGE to PortC Pin X
 #define RLED3 6 //CHANGE to PortC Pin X
 #define MASK(x) (1 << (x)) // Shift 1 to the left for x times
-#define MOVE 1000 //CHANGE to 350ms
-#define STOP 2000 //CHANGE to 200ms
+#define MOVE 240 //CHANGE to 350ms
+#define STOP 120 //CHANGE to 200ms
 
 
 const osThreadAttr_t finishTuneThreadAttr = {
@@ -271,22 +271,22 @@ void initLED(void) {
 
     // Configure MUX to make all 6 pins GPIO
 	PORTC->PCR[GLED1] &= ~PORT_PCR_MUX_MASK;
-	PORTC->PCR[GLED1] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+	PORTC->PCR[GLED1] |= PORT_PCR_MUX(1) | PORT_PCR_PE_MASK| PORT_PCR_PS_MASK; // pull up resistor
 
 	PORTC->PCR[GLED2] &= ~PORT_PCR_MUX_MASK;
-	PORTC->PCR[GLED2] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+	PORTC->PCR[GLED2] |= PORT_PCR_MUX(1) | PORT_PCR_PE_MASK| PORT_PCR_PS_MASK; // pull up resistor
 
 	PORTC->PCR[GLED3] &= ~PORT_PCR_MUX_MASK;
-	PORTC->PCR[GLED3] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+	PORTC->PCR[GLED3] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK |PORT_PCR_PE_MASK; // pull up resistor
 
 	PORTC->PCR[RLED1] &= ~PORT_PCR_MUX_MASK;
-	PORTC->PCR[RLED1] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor
+	PORTC->PCR[RLED1] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK| PORT_PCR_PE_MASK; // pull up resistor
 
 	PORTC->PCR[RLED2] &= ~PORT_PCR_MUX_MASK;
-	PORTC->PCR[RLED2] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor;
+	PORTC->PCR[RLED2] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK| PORT_PCR_PE_MASK; // pull up resistor;
 
 	PORTC->PCR[RLED3] &= ~PORT_PCR_MUX_MASK;
-	PORTC->PCR[RLED3] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK; // pull up resistor;
+	PORTC->PCR[RLED3] |= PORT_PCR_MUX(1) | PORT_PCR_PS_MASK| PORT_PCR_PE_MASK; // pull up resistor;
 
 	// Set Data Direction Registers to make output
 	PTC->PDDR |= (MASK(GLED1) | MASK(GLED2) | MASK(GLED3) | MASK(RLED1) | MASK(RLED2) | MASK(RLED3));
@@ -471,37 +471,39 @@ __NO_RETURN void RLedStop_thread(void *arguments) {
 
 __NO_RETURN void runningTune_thread(void* arguments) {	
 	for(;;) {
-		PlayG4(); osDelay(350); Stop(); osDelay(350);    
-		PlayG4(); osDelay(350); Stop(); osDelay(20); PlayD5(); osDelay(350);     
-		PlayC5(); osDelay(350); Stop(); osDelay(350);  
-		PlayAS4(); osDelay(350); Stop(); osDelay(350); 
-		PlayA4(); osDelay(350); Stop(); osDelay(350);  
-		PlayA4(); osDelay(350); Stop(); osDelay(20); PlayA4(); osDelay(350);     
-		PlayC5(); osDelay(350); Stop(); osDelay(350); 
-		PlayAS4(); osDelay(350); Stop(); osDelay(20); PlayA4(); osDelay(350);
-		PlayG4(); osDelay(350); Stop(); osDelay(350);
-		PlayG4(); osDelay(350); Stop(); osDelay(20); PlayAS5(); osDelay(350);
-		PlayA5(); osDelay(350); Stop(); osDelay(20); PlayAS5(); osDelay(350);
-		PlayA5(); osDelay(350); Stop(); osDelay(20); PlayAS5(); osDelay(350);
-	}
+	
+		PlayG4(); osDelay(200); Stop(); osDelay(200);    
+		PlayG4(); osDelay(200); Stop(); osDelay(20); PlayD5(); osDelay(200);     
+		PlayC5(); osDelay(200); Stop(); osDelay(200);  
+		PlayAS4(); osDelay(200); Stop(); osDelay(200); 
+		PlayA4(); osDelay(200); Stop(); osDelay(200);  
+		PlayA4(); osDelay(200); Stop(); osDelay(20); PlayA4(); osDelay(200);     
+		PlayC5(); osDelay(200); Stop(); osDelay(200); 
+		PlayAS4(); osDelay(200); Stop(); osDelay(20); PlayA4(); osDelay(200);
+		PlayG4(); osDelay(200); Stop(); osDelay(200);
+		PlayG4(); osDelay(200); Stop(); osDelay(20); PlayAS5(); osDelay(200);
+		PlayA5(); osDelay(200); Stop(); osDelay(20); PlayAS5(); osDelay(200);
+		PlayA5(); osDelay(200); Stop(); osDelay(20); PlayAS5(); osDelay(200);
+	
 }
+	}
 
 __NO_RETURN void finishTune_thread(void* arguments) { 
 	for(;;) {	
 		osEventFlagsWait(finishFlag, 1, osFlagsWaitAny, osWaitForever); //wait for the finish flag to be set
-		PlayE5(); osDelay(350); Stop(); osDelay(350); 
-    		PlayE5(); osDelay(350); Stop(); osDelay(350);
-	    	Stop(); osDelay(350); 
-	    	PlayE5(); osDelay(350); Stop(); osDelay(350);    
-	   	Stop(); osDelay(350); 
-	    	PlayC5(); osDelay(350); Stop(); osDelay(350);    
-	    	PlayE5(); osDelay(350); Stop(); osDelay(350);    
+		PlayE5(); osDelay(200); Stop(); osDelay(200); 
+    		PlayE5(); osDelay(200); Stop(); osDelay(200);
+	    	Stop(); osDelay(200); 
+	    	PlayE5(); osDelay(200); Stop(); osDelay(200);    
+	   	Stop(); osDelay(200); 
+	    	PlayC5(); osDelay(200); Stop(); osDelay(200);    
+	    	PlayE5(); osDelay(200); Stop(); osDelay(200);    
 	
 	    	
-	    	PlayG5(); osDelay(350);    Stop(); osDelay(0);    
-	    	Stop(); osDelay(350);  
-	    	PlayG4(); osDelay(350);    Stop(); osDelay(0);    
-	    	Stop(); osDelay(350);  
+	    	PlayG5(); osDelay(200);    Stop(); osDelay(0);    
+	    	Stop(); osDelay(200);  
+	    	PlayG4(); osDelay(200);    Stop(); osDelay(0);    
+	    	Stop(); osDelay(200);  
 	}
 }
 
