@@ -15,6 +15,24 @@ void loop() {
         {
           stopBit = ps5.Cross();
         }
+        if(ps5.Triangle())
+        {
+          stopBit = 0;
+        }
+        
+       /*
+        bool toSend = 0;
+        if(ps5.Circle() && toSend == 0)
+        {
+          toSend = 1;
+          Serial.println("send data enabled");
+        }
+        else
+        {
+          toSend = 0;
+          Serial.println("send data disabled");
+        }
+        */
         int yValue = ps5.LStickY();  
         int xValue = ps5.LStickX(); 
         // Serial.println(yValue);
@@ -34,13 +52,15 @@ void loop() {
         uint8_t combinedData = (xSign << 6) | (xMapped << 4) | (ySign << 3) | (yMapped << 1) | stopBit;
       
         // Send the combined data through Serial2
+        // if(toSend == 1) {
+          
+        // }
         Serial2.write(combinedData);
-        
         // Debugging output
-        //Serial.print("Sent combined data: ");
-        //Serial.println(combinedData, BIN);
+        Serial.print("Sent combined data: ");
+        Serial.println(combinedData, BIN);
 
-        delay(500);  // Delay to prevent sending commands too frequently
+        delay(100);  // Delay to prevent sending commands too frequently
     }
 
     // Check for received data on Serial2 (RX2)
@@ -56,7 +76,7 @@ void loop() {
     }
     
 
-    delay(500);  // Delay to prevent sending commands too frequently
+    //delay(100);  // Delay to prevent sending commands too frequently
 }
 
 void printBinary(char c) {
